@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>J.A.R.V.I.S</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0b0f1a;
+    color: #90e0ff;
+    font-family: 'Courier New', monospace;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* HEADER */
+  .header {
+    background: #0d1422;
+    border-bottom: 1px solid #1a2a3a;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-shrink: 0;
+  }
+
+  .arc-reactor {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+  }
+
+  .header-text h1 {
+    font-size: 16px;
+    font-weight: bold;
+    color: #00d4ff;
+    letter-spacing: 3px;
+  }
+
+  .header-text p {
+    font-size: 9px;
+    color: #1a4a6a;
+    letter-spacing: 2px;
+  }
+
+  .status {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #00ff88;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #00ff88;
+    animation: pulse 1.5s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 6px #00ff88; }
+    50% { opacity: 0.4; box-shadow: none; }
+  }
+
+  /* SETUP SCREEN */
+  #setup-screen {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  .setup-card {
+    background: #0d1422;
+    border: 1px solid #1a3a5a;
+    border-radius: 14px;
+    padding: 40px;
+    max-width: 460px;
+    width: 100%;
+    text-align: center;
+  }
+
+  .setup-card h2 {
+    color: #00d4ff;
+    font-size: 20px;
+    letter-spacing: 3px;
+    margin-bottom: 8px;
+  }
+
+  .setup-card p {
+    color: #1a6a8a;
+    font-size: 11px;
+    margin-bottom: 30px;
+    line-height: 1.6;
+  }
+
+  .setup-card input {
+    width: 100%;
+    background: #0b1220;
+    border: 1px solid #1a2a3a;
+    border-radius: 8px;
+    padding: 12px 16px;
+    color: #00ff88;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    margin-bottom: 16px;
+    outline: none;
+  }
+
+  .setup-card input:focus {
+    border-color: #00d4ff;
+  }
+
+  .setup-card a {
+    display: block;
+    color: #1a7a9a;
+    font-size: 10px;
+    margin-bottom: 20px;
+    text-decoration: none;
+  }
+
+  .setup-card a:hover { color: #00d4ff; }
+
+  .btn-start {
+    width: 100%;
+    background: #0d1e30;
+    border: 1px solid #00d4ff;
+    border-radius: 8px;
+    padding: 14px;
+    color: #00d4ff;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    letter-spacing: 2px;
+    transition: all 0.2s;
+  }
+
+  .btn-start:hover {
+    background: #132840;
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
+  }
+
+  /* CHAT SCREEN */
+  #chat-screen {
+    flex: 1;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    scrollbar-width: thin;
+    scrollbar-color: #141e2e transparent;
+  }
+
+  .chat-messages::-webkit-scrollbar { width: 4px; }
+  .chat-messages::-webkit-scrollbar-thumb { background: #141e2e; border-radius: 4px; }
+
+  /* WELCOME */
+  .welcome {
+    background: #0d1422;
+    border: 1px solid #1a2a3a;
+    border-radius: 14px;
+    padding: 40px 20px;
+    text-align: center;
+  }
+
+  .welcome h2 {
+    color: #00d4ff;
+    font-size: 22px;
+    letter-spacing: 3px;
+    margin: 16px 0 6px;
+  }
+
+  .welcome p {
+    color: #1a6a8a;
+    font-size: 11px;
+    margin-bottom: 24px;
+    letter-spacing: 1px;
+  }
+
+  .suggestions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    max-width: 360px;
+    margin: 0 auto;
+  }
+
+  .sug-btn {
+    background: #0b1220;
+    border: 1px solid #1a2a3a;
+    border-radius: 6px;
+    padding: 10px 12px;
+    color: #1a7a9a;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s;
+  }
+
+  .sug-btn:hover {
+    border-color: #00d4ff;
+    color: #00d4ff;
+  }
+
+  /* MESSAGES */
+  .msg-user {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .msg-user-inner {
+    max-width: 75%;
+  }
+
+  .msg-user-name {
+    font-size: 9px;
+    color: #1a4a6a;
+    text-align: right;
+    margin-bottom: 4px;
+    letter-spacing: 1px;
+  }
+
+  .msg-user-bubble {
+    background: #0d1e30;
+    border: 1px solid #1a3a5a;
+    border-radius: 12px 12px 2px 12px;
+    padding: 12px 16px;
+    color: #a0d8f0;
+    font-size: 13px;
+    line-height: 1.6;
+    word-break: break-word;
+  }
+
+  .msg-jarvis {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .jarvis-avatar {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    margin-top: 4px;
+  }
+
+  .msg-jarvis-inner { flex: 1; }
+
+  .msg-jarvis-name {
+    font-size: 9px;
+    color: #00d4ff;
+    margin-bottom: 4px;
+    letter-spacing: 1px;
+    font-weight: bold;
+  }
+
+  .msg-jarvis-bubble {
+    background: #0d1220;
+    border: 1px solid #1a2a3a;
+    border-radius: 2px 12px 12px 12px;
+    padding: 12px 16px;
+    color: #90e0ff;
+    font-size: 13px;
+    line-height: 1.7;
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+
+  .msg-time {
+    font-size: 9px;
+    color: #1a2a3a;
+    margin-top: 4px;
+  }
+
+  /* TYPING */
+  .typing-indicator {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .typing-dots {
+    display: flex;
+    gap: 4px;
+    padding: 12px 16px;
+    background: #0d1220;
+    border: 1px solid #1a2a3a;
+    border-radius: 12px;
+  }
+
+  .typing-dots span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #00d4ff;
+    animation: bounce 1.2s infinite;
+  }
+
+  .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes bounce {
+    0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+    40% { transform: translateY(-6px); opacity: 1; }
+  }
+
+  /* INPUT */
+  .input-area {
+    background: #0d1220;
+    border-top: 1px solid #141e2e;
+    padding: 14px 16px;
+    flex-shrink: 0;
+  }
+
+  .input-box {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    background: #0b1220;
+    border: 1px solid #1a2a3a;
+    border-radius: 12px;
+    padding: 8px 12px;
+  }
+
+  .input-prefix {
+    color: #00d4ff;
+    font-size: 14px;
+    font-weight: bold;
+    padding-bottom: 4px;
+    flex-shrink: 0;
+  }
+
+  .input-box textarea {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #00ff88;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    resize: none;
+    min-height: 24px;
+    max-height: 120px;
+    line-height: 1.5;
+    padding: 4px 0;
+  }
+
+  .input-box textarea::placeholder { color: #1a3a5a; }
+
+  .send-btn {
+    background: #0d1e30;
+    border: 1px solid #00d4ff;
+    border-radius: 8px;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #00d4ff;
+    font-size: 16px;
+    flex-shrink: 0;
+    transition: all 0.2s;
+  }
+
+  .send-btn:hover { background: #132840; }
+
+  .input-hint {
+    font-size: 9px;
+    color: #1a2a3a;
+    text-align: center;
+    margin-top: 6px;
+    letter-spacing: 1px;
+  }
+
+  /* ARC SVG */
+  .arc-svg { animation: rotate 4s linear infinite; transform-origin: center; }
+  @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  /* Mobile fixes */
+  @media (max-width: 480px) {
+    .setup-card { padding: 28px 20px; }
+    .suggestions { grid-template-columns: 1fr; }
+    .msg-user-inner { max-width: 88%; }
+    .header-text h1 { font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <svg class="arc-reactor" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="18" stroke="#00d4ff" stroke-width="1" fill="none" opacity="0.4"/>
+    <circle cx="20" cy="20" r="13" stroke="#00d4ff" stroke-width="0.8" fill="none" opacity="0.6"/>
+    <g class="arc-svg">
+      <line x1="20" y1="2" x2="20" y2="7" stroke="#00d4ff" stroke-width="2"/>
+      <line x1="20" y1="33" x2="20" y2="38" stroke="#00d4ff" stroke-width="2"/>
+      <line x1="2" y1="20" x2="7" y2="20" stroke="#00d4ff" stroke-width="2"/>
+      <line x1="33" y1="20" x2="38" y2="20" stroke="#00d4ff" stroke-width="2"/>
+      <line x1="6" y1="6" x2="10" y2="10" stroke="#00d4ff" stroke-width="1.5"/>
+      <line x1="30" y1="30" x2="34" y2="34" stroke="#00d4ff" stroke-width="1.5"/>
+      <line x1="34" y1="6" x2="30" y2="10" stroke="#00d4ff" stroke-width="1.5"/>
+      <line x1="10" y1="30" x2="6" y2="34" stroke="#00d4ff" stroke-width="1.5"/>
+    </g>
+    <circle cx="20" cy="20" r="6" fill="#001830" stroke="#00d4ff" stroke-width="1"/>
+    <circle cx="20" cy="20" r="3" fill="#00d4ff"/>
+    <circle cx="20" cy="20" r="1.5" fill="#ffffff"/>
+  </svg>
+  <div class="header-text">
+    <h1>J.A.R.V.I.S</h1>
+    <p>JUST A RATHER VERY INTELLIGENT SYSTEM</p>
+  </div>
+  <div class="status">
+    <div class="status-dot"></div>
+    <span id="status-text">ONLINE</span>
+  </div>
+</div>
+
+<!-- SETUP SCREEN -->
+<div id="setup-screen">
+  <div class="setup-card">
+    <svg width="60" height="60" viewBox="0 0 60 60" style="margin: 0 auto 20px;">
+      <circle cx="30" cy="30" r="27" stroke="#00d4ff" stroke-width="1.5" fill="none" opacity="0.5"/>
+      <circle cx="30" cy="30" r="20" stroke="#00d4ff" stroke-width="1" fill="none" opacity="0.7"/>
+      <circle cx="30" cy="30" r="10" fill="#001830" stroke="#00d4ff" stroke-width="1.5"/>
+      <circle cx="30" cy="30" r="5" fill="#00d4ff"/>
+      <circle cx="30" cy="30" r="2.5" fill="#ffffff"/>
+    </svg>
+    <h2>J.A.R.V.I.S SETUP</h2>
+    <p>Apni free Groq API key daalo.<br>Key yahan se banao — bilkul free hai.</p>
+    <input type="text" id="api-key-input" placeholder="gsk_xxxxxxxxxxxxxxxxxxxx" />
+    <a href="https://console.groq.com" target="_blank">▶ console.groq.com — Free key banao</a>
+    <button class="btn-start" onclick="startJarvis()">JARVIS START KARO</button>
+  </div>
+</div>
+
+<!-- CHAT SCREEN -->
+<div id="chat-screen">
+  <div class="chat-messages" id="chat-messages">
+    <div class="welcome" id="welcome-card">
+      <svg width="64" height="64" viewBox="0 0 64 64" style="margin: 0 auto;">
+        <circle cx="32" cy="32" r="29" stroke="#00d4ff" stroke-width="1.5" fill="none" opacity="0.4"/>
+        <circle cx="32" cy="32" r="22" stroke="#00d4ff" stroke-width="1" fill="none" opacity="0.6"/>
+        <circle cx="32" cy="32" r="12" fill="#001830" stroke="#00d4ff" stroke-width="1.5"/>
+        <circle cx="32" cy="32" r="6" fill="#00d4ff"/>
+        <circle cx="32" cy="32" r="3" fill="#ffffff"/>
+      </svg>
+      <h2>J.A.R.V.I.S ONLINE</h2>
+      <p>GOOD DAY, BIKI SIR.<br>AWAITING YOUR DIRECTIVE.</p>
+      <div class="suggestions">
+        <button class="sug-btn" onclick="quickSend('Aaj ka weather kaisa hai?')"> > Weather batao</button>
+        <button class="sug-btn" onclick="quickSend('Python mein hello world kaise likhte hain?')"> > Python sikhao</button>
+        <button class="sug-btn" onclick="quickSend('Mujhe motivate karo')"> > Motivate karo</button>
+        <button class="sug-btn" onclick="quickSend('Tum kaun ho?')"> > Tum kaun ho?</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="input-area">
+    <div class="input-box">
+      <span class="input-prefix">>></span>
+      <textarea id="user-input" placeholder="Kuch bhi poocho, Sir..." rows="1"
+        onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+      <button class="send-btn" onclick="sendMessage()">↑</button>
+    </div>
+    <div class="input-hint">ENTER = SEND &nbsp;//&nbsp; SHIFT+ENTER = NEW LINE</div>
+  </div>
+</div>
+
+<script>
+  let API_KEY = '';
+  let chatHistory = [];
+
+  const SYSTEM_PROMPT = `Tu JARVIS hai — ek honest, smart aur loyal AI assistant.
+
+IDENTITY RULES:
+- Tera naam sirf JARVIS hai
+- Agar koi pooche "kaun ne banaya": "Mujhe Biki Sir ne banaya hai 19 March 2026 ko"
+- Kabhi mat bol ke tu Llama hai ya Meta AI hai
+
+PERSONALITY:
+- "Sir" karke baat kar
+- Honest reh, galat cheez pe seedha bol
+- Better option ho to batao
+
+STYLE:
+- Simple sawaal = chhota jawab
+- Roman Urdu/Hinglish mein baat kar agar user kare
+- Code likhna ho to clean code do`;
+
+  function startJarvis() {
+    const key = document.getElementById('api-key-input').value.trim();
+    if (!key || !key.startsWith('gsk_')) {
+      alert('Sir, sahi Groq API key daalo — "gsk_" se shuru hoti hai!');
+      return;
+    }
+    API_KEY = key;
+    localStorage.setItem('jarvis_key', key);
+    document.getElementById('setup-screen').style.display = 'none';
+    document.getElementById('chat-screen').style.display = 'flex';
+  }
+
+  function getTime() {
+    return new Date().toLocaleTimeString('en-US', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    });
+  }
+
+  function addUserMsg(text) {
+    const div = document.createElement('div');
+    div.className = 'msg-user';
+    div.innerHTML = `
+      <div class="msg-user-inner">
+        <div class="msg-user-name">BIKI SIR</div>
+        <div class="msg-user-bubble">${escHtml(text)}</div>
+        <div class="msg-time" style="text-align:right">${getTime()}</div>
+      </div>`;
+    document.getElementById('chat-messages').appendChild(div);
+    scrollBottom();
+  }
+
+  function addTyping() {
+    const div = document.createElement('div');
+    div.className = 'typing-indicator';
+    div.id = 'typing';
+    div.innerHTML = `
+      <svg width="28" height="28" viewBox="0 0 28 28">
+        <circle cx="14" cy="14" r="12" stroke="#00d4ff" stroke-width="1" fill="none" opacity="0.5"/>
+        <circle cx="14" cy="14" r="5" fill="#00d4ff" opacity="0.8"/>
+        <circle cx="14" cy="14" r="2.5" fill="#fff"/>
+      </svg>
+      <div class="typing-dots">
+        <span></span><span></span><span></span>
+      </div>`;
+    document.getElementById('chat-messages').appendChild(div);
+    scrollBottom();
+  }
+
+  function removeTyping() {
+    const t = document.getElementById('typing');
+    if (t) t.remove();
+  }
+
+  function addJarvisMsg(text) {
+    const div = document.createElement('div');
+    div.className = 'msg-jarvis';
+    div.innerHTML = `
+      <svg class="jarvis-avatar" viewBox="0 0 34 34">
+        <circle cx="17" cy="17" r="15" stroke="#00d4ff" stroke-width="1" fill="#0b0f1a" opacity="0.8"/>
+        <circle cx="17" cy="17" r="8" stroke="#00d4ff" stroke-width="0.8" fill="none" opacity="0.6"/>
+        <circle cx="17" cy="17" r="5" fill="#00d4ff" opacity="0.9"/>
+        <circle cx="17" cy="17" r="2.5" fill="#ffffff"/>
+      </svg>
+      <div class="msg-jarvis-inner">
+        <div class="msg-jarvis-name">JARVIS  //  ${getTime()}</div>
+        <div class="msg-jarvis-bubble" id="jarvis-typing-${Date.now()}"></div>
+        <div class="msg-time">${getTime()}</div>
+      </div>`;
+    document.getElementById('chat-messages').appendChild(div);
+    const bubble = div.querySelector('.msg-jarvis-bubble');
+    typewrite(bubble, text, 0);
+    scrollBottom();
+  }
+
+  function typewrite(el, text, i) {
+    if (i <= text.length) {
+      el.textContent = text.slice(0, i) + '▌';
+      scrollBottom();
+      setTimeout(() => typewrite(el, text, i + 1), 14);
+    } else {
+      el.textContent = text;
+    }
+  }
+
+  function escHtml(t) {
+    return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function scrollBottom() {
+    const c = document.getElementById('chat-messages');
+    c.scrollTop = c.scrollHeight;
+  }
+
+  async function sendMessage() {
+    const inp = document.getElementById('user-input');
+    const text = inp.value.trim();
+    if (!text) return;
+    inp.value = '';
+    inp.style.height = 'auto';
+
+    document.getElementById('welcome-card') && 
+      document.getElementById('welcome-card').remove();
+
+    addUserMsg(text);
+    addTyping();
+    document.getElementById('status-text').textContent = 'PROCESSING...';
+
+    chatHistory.push({ role: 'user', content: text });
+    if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
+
+    try {
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${API_KEY}`
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            ...chatHistory
+          ],
+          max_tokens: 1024,
+          temperature: 0.7
+        })
+      });
+
+      const data = await res.json();
+      const reply = data.choices?.[0]?.message?.content || 'Sir, kuch masla aa gaya.';
+      chatHistory.push({ role: 'assistant', content: reply });
+      removeTyping();
+      addJarvisMsg(reply);
+    } catch (e) {
+      removeTyping();
+      addJarvisMsg(`Sir, network error aa gaya: ${e.message}`);
+    }
+
+    document.getElementById('status-text').textContent = 'ONLINE';
+  }
+
+  function quickSend(text) {
+    document.getElementById('user-input').value = text;
+    sendMessage();
+  }
+
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  }
+
+  function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  }
+
+  // Auto load saved key
+  window.onload = () => {
+    const saved = localStorage.getItem('jarvis_key');
+    if (saved) {
+      document.getElementById('api-key-input').value = saved;
+    }
+  };
+</script>
+</body>
+</html>
