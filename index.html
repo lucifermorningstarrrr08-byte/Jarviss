@@ -1,756 +1,945 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
- <link rel="manifest" href="/Jarviss/manifest.json">
-<title>J.A.R.V.I.S</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+import threading
+import customtkinter as ctk
+import subprocess
+import webbrowser
+import pyautogui
+import time
+import math
+import base64
+import json
+import os
+from groq import Groq
+from datetime import datetime
+import requests
+from PIL import Image
+from io import BytesIO
+import urllib.parse
+import tkinter as tk
 
-  body {
-    background: #0b0f1a;
-    color: #90e0ff;
-    font-family: 'Courier New', monospace;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
+# ── CONFIG FILE ───────────────────────────────────────────────
+CONFIG_FILE = "jarvis_config.json"
 
-  .header {
-    background: #0d1422;
-    border-bottom: 1px solid #1a2a3a;
-    padding: 12px 20px;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    flex-shrink: 0;
-  }
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            pass
+    return {}
 
-  .arc-reactor { width: 40px; height: 40px; flex-shrink: 0; }
+def save_config(data):
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump(data, f)
 
-  .header-text h1 {
-    font-size: 16px;
-    font-weight: bold;
-    color: #00d4ff;
-    letter-spacing: 3px;
-  }
+# ── GLOBALS ───────────────────────────────────────────────────
+groq_client = None
+HF_API_KEY = ""
 
-  .header-text p { font-size: 9px; color: #1a4a6a; letter-spacing: 2px; }
-
-  .status {
-    margin-left: auto;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    color: #00ff88;
-  }
-
-  .status-dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    background: #00ff88;
-    animation: pulse 1.5s infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; box-shadow: 0 0 6px #00ff88; }
-    50% { opacity: 0.4; box-shadow: none; }
-  }
-
-  #setup-screen {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-  }
-
-  .setup-card {
-    background: #0d1422;
-    border: 1px solid #1a3a5a;
-    border-radius: 14px;
-    padding: 40px;
-    max-width: 460px;
-    width: 100%;
-    text-align: center;
-  }
-
-  .setup-card h2 {
-    color: #00d4ff;
-    font-size: 20px;
-    letter-spacing: 3px;
-    margin-bottom: 8px;
-  }
-
-  .setup-card p {
-    color: #1a6a8a;
-    font-size: 11px;
-    margin-bottom: 24px;
-    line-height: 1.7;
-  }
-
-  .setup-card input {
-    width: 100%;
-    background: #0b1220;
-    border: 1px solid #1a2a3a;
-    border-radius: 8px;
-    padding: 12px 16px;
-    color: #00ff88;
-    font-family: 'Courier New', monospace;
-    font-size: 13px;
-    margin-bottom: 12px;
-    outline: none;
-  }
-
-  .setup-card input:focus { border-color: #00d4ff; }
-
-  .setup-card a {
-    display: block;
-    color: #1a7a9a;
-    font-size: 10px;
-    margin-bottom: 20px;
-    text-decoration: none;
-  }
-
-  .setup-card a:hover { color: #00d4ff; }
-
-  .btn-start {
-    width: 100%;
-    background: #0d1e30;
-    border: 1px solid #00d4ff;
-    border-radius: 8px;
-    padding: 14px;
-    color: #00d4ff;
-    font-family: 'Courier New', monospace;
-    font-size: 14px;
-    font-weight: bold;
-    cursor: pointer;
-    letter-spacing: 2px;
-    transition: all 0.2s;
-  }
-
-  .btn-start:hover { background: #132840; }
-
-  #chat-screen {
-    flex: 1;
-    display: none;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  .chat-messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    scrollbar-width: thin;
-    scrollbar-color: #141e2e transparent;
-  }
-
-  .chat-messages::-webkit-scrollbar { width: 4px; }
-  .chat-messages::-webkit-scrollbar-thumb { background: #141e2e; border-radius: 4px; }
-
-  .welcome {
-    background: #0d1422;
-    border: 1px solid #1a2a3a;
-    border-radius: 14px;
-    padding: 40px 20px;
-    text-align: center;
-  }
-
-  .welcome h2 {
-    color: #00d4ff;
-    font-size: 22px;
-    letter-spacing: 3px;
-    margin: 16px 0 6px;
-  }
-
-  .welcome p { color: #1a6a8a; font-size: 11px; margin-bottom: 24px; letter-spacing: 1px; }
-
-  .suggestions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    max-width: 400px;
-    margin: 0 auto;
-  }
-
-  .sug-btn {
-    background: #0b1220;
-    border: 1px solid #1a2a3a;
-    border-radius: 6px;
-    padding: 10px 12px;
-    color: #1a7a9a;
-    font-family: 'Courier New', monospace;
-    font-size: 11px;
-    cursor: pointer;
-    text-align: left;
-    transition: all 0.2s;
-  }
-
-  .sug-btn:hover { border-color: #00d4ff; color: #00d4ff; }
-
-  .msg-user { display: flex; justify-content: flex-end; }
-  .msg-user-inner { max-width: 75%; }
-
-  .msg-user-name {
-    font-size: 9px; color: #1a4a6a;
-    text-align: right; margin-bottom: 4px; letter-spacing: 1px;
-  }
-
-  .msg-user-bubble {
-    background: #0d1e30;
-    border: 1px solid #1a3a5a;
-    border-radius: 12px 12px 2px 12px;
-    padding: 12px 16px;
-    color: #a0d8f0;
-    font-size: 13px;
-    line-height: 1.6;
-    word-break: break-word;
-  }
-
-  .msg-jarvis { display: flex; gap: 12px; align-items: flex-start; }
-  .jarvis-avatar { width: 34px; height: 34px; flex-shrink: 0; margin-top: 4px; }
-  .msg-jarvis-inner { flex: 1; }
-
-  .msg-jarvis-name {
-    font-size: 9px; color: #00d4ff;
-    margin-bottom: 4px; letter-spacing: 1px; font-weight: bold;
-  }
-
-  .msg-jarvis-bubble {
-    background: #0d1220;
-    border: 1px solid #1a2a3a;
-    border-radius: 2px 12px 12px 12px;
-    padding: 12px 16px;
-    color: #90e0ff;
-    font-size: 13px;
-    line-height: 1.7;
-    word-break: break-word;
-    white-space: pre-wrap;
-  }
-
-  .msg-time { font-size: 9px; color: #1a2a3a; margin-top: 4px; }
-
-  .msg-image {
-    max-width: 100%;
-    border-radius: 8px;
-    border: 1px solid #1a3a5a;
-    margin-top: 10px;
-    display: block;
-  }
-
-  .img-progress {
-    background: #0a1422;
-    border: 1px solid #1a3a5a;
-    border-radius: 8px;
-    padding: 14px;
-    margin-top: 10px;
-  }
-
-  .img-progress-title {
-    color: #00d4ff;
-    font-size: 11px;
-    font-weight: bold;
-    margin-bottom: 8px;
-    letter-spacing: 1px;
-  }
-
-  .img-progress-bar-bg {
-    background: #0b1220;
-    border-radius: 4px;
-    height: 6px;
-    margin-bottom: 6px;
-    overflow: hidden;
-  }
-
-  .img-progress-bar {
-    height: 100%;
-    background: #00d4ff;
-    border-radius: 4px;
-    transition: width 0.5s ease;
-    width: 0%;
-  }
-
-  .img-progress-text { font-size: 10px; color: #1a5a7a; }
-  .img-timer { font-size: 18px; font-weight: bold; color: #00ff88; margin-top: 8px; }
-
-  .typing-indicator { display: flex; gap: 12px; align-items: center; }
-
-  .typing-dots {
-    display: flex; gap: 4px;
-    padding: 12px 16px;
-    background: #0d1220;
-    border: 1px solid #1a2a3a;
-    border-radius: 12px;
-  }
-
-  .typing-dots span {
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    background: #00d4ff;
-    animation: bounce 1.2s infinite;
-  }
-
-  .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
-  .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
-
-  @keyframes bounce {
-    0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
-    40% { transform: translateY(-6px); opacity: 1; }
-  }
-
-  .input-area {
-    background: #0d1220;
-    border-top: 1px solid #141e2e;
-    padding: 14px 16px;
-    flex-shrink: 0;
-  }
-
-  .input-box {
-    display: flex;
-    gap: 10px;
-    align-items: flex-end;
-    background: #0b1220;
-    border: 1px solid #1a2a3a;
-    border-radius: 12px;
-    padding: 8px 12px;
-  }
-
-  .input-prefix {
-    color: #00d4ff;
-    font-size: 14px;
-    font-weight: bold;
-    padding-bottom: 4px;
-    flex-shrink: 0;
-  }
-
-  .input-box textarea {
-    flex: 1;
-    background: transparent;
-    border: none;
-    outline: none;
-    color: #00ff88;
-    font-family: 'Courier New', monospace;
-    font-size: 13px;
-    resize: none;
-    min-height: 24px;
-    max-height: 120px;
-    line-height: 1.5;
-    padding: 4px 0;
-  }
-
-  .input-box textarea::placeholder { color: #1a3a5a; }
-
-  .send-btn {
-    background: #0d1e30;
-    border: 1px solid #00d4ff;
-    border-radius: 8px;
-    width: 36px; height: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    color: #00d4ff;
-    font-size: 16px;
-    flex-shrink: 0;
-    transition: all 0.2s;
-  }
-
-  .send-btn:hover { background: #132840; }
-
-  .input-hint {
-    font-size: 9px;
-    color: #1a2a3a;
-    text-align: center;
-    margin-top: 6px;
-    letter-spacing: 1px;
-  }
-
-  .arc-svg { animation: rotate 4s linear infinite; transform-origin: center; }
-  @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-
-  @media (max-width: 480px) {
-    .setup-card { padding: 28px 20px; }
-    .suggestions { grid-template-columns: 1fr; }
-    .msg-user-inner { max-width: 88%; }
-    .header-text h1 { font-size: 13px; }
-  }
-</style>
-</head>
-<body>
-
-<div class="header">
-  <svg class="arc-reactor" viewBox="0 0 40 40">
-    <circle cx="20" cy="20" r="18" stroke="#00d4ff" stroke-width="1" fill="none" opacity="0.4"/>
-    <circle cx="20" cy="20" r="13" stroke="#00d4ff" stroke-width="0.8" fill="none" opacity="0.6"/>
-    <g class="arc-svg">
-      <line x1="20" y1="2" x2="20" y2="7" stroke="#00d4ff" stroke-width="2"/>
-      <line x1="20" y1="33" x2="20" y2="38" stroke="#00d4ff" stroke-width="2"/>
-      <line x1="2" y1="20" x2="7" y2="20" stroke="#00d4ff" stroke-width="2"/>
-      <line x1="33" y1="20" x2="38" y2="20" stroke="#00d4ff" stroke-width="2"/>
-      <line x1="6" y1="6" x2="10" y2="10" stroke="#00d4ff" stroke-width="1.5"/>
-      <line x1="30" y1="30" x2="34" y2="34" stroke="#00d4ff" stroke-width="1.5"/>
-      <line x1="34" y1="6" x2="30" y2="10" stroke="#00d4ff" stroke-width="1.5"/>
-      <line x1="10" y1="30" x2="6" y2="34" stroke="#00d4ff" stroke-width="1.5"/>
-    </g>
-    <circle cx="20" cy="20" r="6" fill="#001830" stroke="#00d4ff" stroke-width="1"/>
-    <circle cx="20" cy="20" r="3" fill="#00d4ff"/>
-    <circle cx="20" cy="20" r="1.5" fill="#ffffff"/>
-  </svg>
-  <div class="header-text">
-    <h1>J.A.R.V.I.S</h1>
-    <p>JUST A RATHER VERY INTELLIGENT SYSTEM</p>
-  </div>
-  <div class="status">
-    <div class="status-dot"></div>
-    <span id="status-text">ONLINE</span>
-  </div>
-</div>
-
-<div id="setup-screen">
-  <div class="setup-card">
-    <svg width="60" height="60" viewBox="0 0 60 60" style="margin:0 auto 20px;">
-      <circle cx="30" cy="30" r="27" stroke="#00d4ff" stroke-width="1.5" fill="none" opacity="0.5"/>
-      <circle cx="30" cy="30" r="20" stroke="#00d4ff" stroke-width="1" fill="none" opacity="0.7"/>
-      <circle cx="30" cy="30" r="10" fill="#001830" stroke="#00d4ff" stroke-width="1.5"/>
-      <circle cx="30" cy="30" r="5" fill="#00d4ff"/>
-      <circle cx="30" cy="30" r="2.5" fill="#ffffff"/>
-    </svg>
-    <h2>J.A.R.V.I.S SETUP</h2>
-    <p>Apni free Groq API key daalo.<br>Key yahan se banao — bilkul free hai.</p>
-    <input type="text" id="api-key-input" placeholder="gsk_xxxxxxxxxxxxxxxxxxxx"/>
-    <a href="https://console.groq.com" target="_blank">▶ console.groq.com — Free key banao</a>
-    <button class="btn-start" onclick="startJarvis()">JARVIS START KARO</button>
-  </div>
-</div>
-
-<div id="chat-screen">
-  <div class="chat-messages" id="chat-messages">
-    <div class="welcome" id="welcome-card">
-      <svg width="64" height="64" viewBox="0 0 64 64" style="margin:0 auto;">
-        <circle cx="32" cy="32" r="29" stroke="#00d4ff" stroke-width="1.5" fill="none" opacity="0.4"/>
-        <circle cx="32" cy="32" r="22" stroke="#00d4ff" stroke-width="1" fill="none" opacity="0.6"/>
-        <circle cx="32" cy="32" r="12" fill="#001830" stroke="#00d4ff" stroke-width="1.5"/>
-        <circle cx="32" cy="32" r="6" fill="#00d4ff"/>
-        <circle cx="32" cy="32" r="3" fill="#ffffff"/>
-      </svg>
-      <h2>J.A.R.V.I.S ONLINE</h2>
-      <p>GOOD DAY, BIKI SIR.<br>AWAITING YOUR DIRECTIVE.</p>
-      <div class="suggestions">
-        <button class="sug-btn" onclick="quickSend('Aaj ka weather kaisa hai?')"> > Weather batao</button>
-        <button class="sug-btn" onclick="quickSend('Python mein hello world kaise likhte hain?')"> > Python sikhao</button>
-        <button class="sug-btn" onclick="quickSend('image banao iron man suit')"> > Image banao</button>
-        <button class="sug-btn" onclick="quickSend('Tum kaun ho?')"> > Tum kaun ho?</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="input-area">
-    <div class="input-box">
-      <span class="input-prefix">>></span>
-      <textarea id="user-input" placeholder="Kuch bhi poocho Sir... ya 'image banao iron man' likho" rows="1"
-        onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
-      <button class="send-btn" onclick="sendMessage()">↑</button>
-    </div>
-    <div class="input-hint">ENTER = SEND // SHIFT+ENTER = NEW LINE // "image banao [kuch bhi]"</div>
-  </div>
-</div>
-
-<script>
-  let API_KEY = '';
-  let chatHistory = [];
-  let imgTimerInterval = null;
-  let imgElapsed = 0;
-
-  const SYSTEM_PROMPT = `Tu JARVIS hai — ek honest, smart aur loyal AI assistant.
+SYSTEM_PROMPT = """Tu JARVIS hai — ek honest, smart aur loyal AI assistant.
 
 IDENTITY RULES:
 - Tera naam sirf JARVIS hai
 - Agar koi pooche "kaun ne banaya": "Mujhe Biki Sir ne banaya hai 19 March 2026 ko"
 - Kabhi mat bol ke tu Llama hai ya Meta AI hai
+- Tu sirf JARVIS hai
 
 PERSONALITY:
 - "Sir" karke baat kar
 - Honest reh, galat cheez pe seedha bol
+- Sirf "haan haan" mat kar
 - Better option ho to batao
 
 STYLE:
 - Simple sawaal = chhota jawab
 - Roman Urdu/Hinglish mein baat kar agar user kare
-- Code likhna ho to clean code do`;
+- Code likhna ho to clean aur working code do
+"""
 
-  function startJarvis() {
-    const key = document.getElementById('api-key-input').value.trim();
-    if (!key || !key.startsWith('gsk_')) {
-      alert('Sir, sahi Groq API key daalo — "gsk_" se shuru hoti hai!');
-      return;
-    }
-    API_KEY = key;
-    localStorage.setItem('jarvis_key', key);
-    document.getElementById('setup-screen').style.display = 'none';
-    document.getElementById('chat-screen').style.display = 'flex';
-  }
+conversation_history = []
 
-  function getTime() {
-    return new Date().toLocaleTimeString('en-US', {
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-    });
-  }
+def ask_jarvis(user_input):
+    global conversation_history
+    conversation_history.append({"role": "user", "content": user_input})
+    if len(conversation_history) > 20:
+        conversation_history = conversation_history[-20:]
+    try:
+        response = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "system", "content": SYSTEM_PROMPT}] + conversation_history,
+            max_tokens=1024,
+            temperature=0.7
+        )
+        reply = response.choices[0].message.content
+        conversation_history.append({"role": "assistant", "content": reply})
+        return reply
+    except Exception as e:
+        return f"Sir, kuch masla aa gaya: {str(e)}"
 
-  function jarvisAvatarHTML() {
-    return `<svg class="jarvis-avatar" viewBox="0 0 34 34">
-      <circle cx="17" cy="17" r="15" stroke="#00d4ff" stroke-width="1" fill="#0b0f1a" opacity="0.8"/>
-      <circle cx="17" cy="17" r="8" stroke="#00d4ff" stroke-width="0.8" fill="none" opacity="0.6"/>
-      <circle cx="17" cy="17" r="5" fill="#00d4ff" opacity="0.9"/>
-      <circle cx="17" cy="17" r="2.5" fill="#ffffff"/>
-    </svg>`;
-  }
+def generate_image(prompt, progress_callback=None):
+    try:
+        seed = int(time.time())
+        encoded = urllib.parse.quote(prompt)
 
-  function addUserMsg(text) {
-    const wc = document.getElementById('welcome-card');
-    if (wc) wc.remove();
-    const div = document.createElement('div');
-    div.className = 'msg-user';
-    div.innerHTML = `
-      <div class="msg-user-inner">
-        <div class="msg-user-name">BIKI SIR</div>
-        <div class="msg-user-bubble">${escHtml(text)}</div>
-        <div class="msg-time" style="text-align:right">${getTime()}</div>
-      </div>`;
-    document.getElementById('chat-messages').appendChild(div);
-    scrollBottom();
-  }
+        # SERVER 1: Stable Horde
+        try:
+            if progress_callback:
+                progress_callback(1, 4, "Stable Horde community server...")
+            submit = requests.post(
+                "https://stablehorde.net/api/v2/generate/async",
+                headers={"apikey": "0000000000", "Content-Type": "application/json"},
+                json={"prompt": prompt, "params": {"width": 512, "height": 512, "steps": 20, "n": 1}},
+                timeout=30
+            )
+            if submit.status_code == 202:
+                job_id = submit.json().get("id")
+                for attempt in range(60):
+                    time.sleep(5)
+                    if progress_callback:
+                        progress_callback(1, 4, f"Stable Horde: {(attempt+1)*5}s elapsed...")
+                    check = requests.get(
+                        f"https://stablehorde.net/api/v2/generate/check/{job_id}",
+                        timeout=10
+                    )
+                    if check.json().get("done"):
+                        result = requests.get(
+                            f"https://stablehorde.net/api/v2/generate/status/{job_id}",
+                            timeout=10
+                        )
+                        generations = result.json().get("generations", [])
+                        if generations:
+                            img_raw = generations[0].get("img")
+                            if img_raw:
+                                img_bytes = requests.get(img_raw, timeout=20).content if img_raw.startswith("http") else base64.b64decode(img_raw)
+                                filename = f"jarvis_image_{seed}.png"
+                                with open(filename, "wb") as f:
+                                    f.write(img_bytes)
+                                Image.open(filename).show()
+                                return f"Sir, image bana di! '{filename}' save ho gayi."
+        except:
+            pass
 
-  function addTyping() {
-    const div = document.createElement('div');
-    div.className = 'typing-indicator';
-    div.id = 'typing';
-    div.innerHTML = `${jarvisAvatarHTML()}
-      <div class="typing-dots"><span></span><span></span><span></span></div>`;
-    document.getElementById('chat-messages').appendChild(div);
-    scrollBottom();
-  }
+        # SERVER 2: HuggingFace SDXL
+        try:
+            if progress_callback:
+                progress_callback(2, 4, "HuggingFace SDXL...")
+            r = requests.post(
+                "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0",
+                headers={"Authorization": f"Bearer {HF_API_KEY}"},
+                json={"inputs": prompt},
+                timeout=180
+            )
+            if r.status_code == 200 and len(r.content) > 5000:
+                filename = f"jarvis_image_{seed}.png"
+                with open(filename, "wb") as f:
+                    f.write(r.content)
+                Image.open(filename).show()
+                return f"Sir, SDXL se image bana di! '{filename}' save ho gayi."
+        except:
+            pass
 
-  function removeTyping() {
-    const t = document.getElementById('typing');
-    if (t) t.remove();
-  }
+        # SERVER 3: Pollinations
+        try:
+            if progress_callback:
+                progress_callback(3, 4, "Pollinations server...")
+            url = f"https://image.pollinations.ai/prompt/{encoded}?width=512&height=512&nologo=true&model=flux&seed={seed}"
+            r = requests.get(url, timeout=60, headers={"User-Agent": "Mozilla/5.0"})
+            if r.status_code == 200 and len(r.content) > 5000:
+                filename = f"jarvis_image_{seed}.png"
+                with open(filename, "wb") as f:
+                    f.write(r.content)
+                Image.open(filename).show()
+                return f"Sir, Pollinations se image bana di! '{filename}' save ho gayi."
+        except:
+            pass
 
-  function addJarvisMsg(text) {
-    const div = document.createElement('div');
-    div.className = 'msg-jarvis';
-    const id = 'jb_' + Date.now();
-    div.innerHTML = `
-      ${jarvisAvatarHTML()}
-      <div class="msg-jarvis-inner">
-        <div class="msg-jarvis-name">JARVIS  //  ${getTime()}</div>
-        <div class="msg-jarvis-bubble" id="${id}"></div>
-        <div class="msg-time">${getTime()}</div>
-      </div>`;
-    document.getElementById('chat-messages').appendChild(div);
-    typewrite(document.getElementById(id), text, 0);
-    scrollBottom();
-  }
+        # SERVER 4: Lexica
+        try:
+            if progress_callback:
+                progress_callback(4, 4, "Lexica search...")
+            r = requests.get(
+                f"https://lexica.art/api/v1/search?q={encoded}",
+                timeout=15, headers={"User-Agent": "Mozilla/5.0"}
+            )
+            if r.status_code == 200:
+                data = r.json()
+                if data.get("images"):
+                    img_r = requests.get(data["images"][0]["src"], timeout=20)
+                    filename = f"jarvis_image_{seed}.jpg"
+                    with open(filename, "wb") as f:
+                        f.write(img_r.content)
+                    Image.open(filename).show()
+                    return f"Sir, Lexica se image mil gayi! '{filename}' save ho gayi."
+        except:
+            pass
 
-  function addImageProgress() {
-    const div = document.createElement('div');
-    div.className = 'msg-jarvis';
-    div.id = 'img-progress-msg';
-    div.innerHTML = `
-      ${jarvisAvatarHTML()}
-      <div class="msg-jarvis-inner">
-        <div class="msg-jarvis-name">JARVIS  //  ${getTime()}</div>
-        <div class="msg-jarvis-bubble">
-          Sir, image generate ho rahi hai... wait karein.
-          <div class="img-progress">
-            <div class="img-progress-title" id="img-prog-title">⚡ IMAGE SYNTHESIS ACTIVE</div>
-            <div class="img-progress-bar-bg">
-              <div class="img-progress-bar" id="img-prog-bar"></div>
-            </div>
-            <div class="img-progress-text" id="img-prog-text">Connecting to server...</div>
-            <div class="img-timer" id="img-timer">00:00</div>
-          </div>
-        </div>
-      </div>`;
-    document.getElementById('chat-messages').appendChild(div);
-    scrollBottom();
-    imgElapsed = 0;
-    imgTimerInterval = setInterval(() => {
-      imgElapsed++;
-      const m = String(Math.floor(imgElapsed/60)).padStart(2,'0');
-      const s = String(imgElapsed%60).padStart(2,'0');
-      const el = document.getElementById('img-timer');
-      if (el) el.textContent = `${m}:${s}`;
-    }, 1000);
-  }
+        return "Sir, abhi saare servers busy hain — 2 minute baad try karein."
+    except Exception as e:
+        return f"Sir, kuch masla aaya: {str(e)}"
 
-  function updateImageProgress(current, total, serverName) {
-    const pct = Math.round((current/total)*100);
-    const bar = document.getElementById('img-prog-bar');
-    const text = document.getElementById('img-prog-text');
-    const title = document.getElementById('img-prog-title');
-    if (bar) bar.style.width = pct + '%';
-    if (text) text.textContent = `▶ ${serverName}`;
-    if (title) title.textContent = `⚡ IMAGE SYNTHESIS  ${pct}%  [${current}/${total}]`;
-  }
+def do_pc_task(command):
+    cmd = command.lower()
+    if any(w in cmd for w in ["image banao", "image bana", "tasveer banao"]):
+        return None
+    if "chrome kholo" in cmd or "browser kholo" in cmd:
+        webbrowser.open("https://google.com")
+        return "Sir, Chrome khol diya."
+    elif "notepad kholo" in cmd:
+        subprocess.Popen("notepad.exe")
+        return "Sir, Notepad khol diya."
+    elif "calculator kholo" in cmd:
+        subprocess.Popen("calc.exe")
+        return "Sir, Calculator khol diya."
+    elif "youtube kholo" in cmd:
+        webbrowser.open("https://youtube.com")
+        return "Sir, YouTube khol diya."
+    elif "screenshot lo" in cmd:
+        screenshot = pyautogui.screenshot()
+        filename = f"screenshot_{int(time.time())}.png"
+        screenshot.save(filename)
+        return f"Sir, screenshot le li — '{filename}' mein save ho gayi."
+    elif "band karo" in cmd or "close karo" in cmd:
+        pyautogui.hotkey('alt', 'f4')
+        return "Sir, window band kar di."
+    elif "volume badha" in cmd:
+        for _ in range(5): pyautogui.press('volumeup')
+        return "Sir, volume badha diya."
+    elif "volume ghata" in cmd:
+        for _ in range(5): pyautogui.press('volumedown')
+        return "Sir, volume ghata diya."
+    return None
 
-  function removeImageProgress() {
-    clearInterval(imgTimerInterval);
-    const el = document.getElementById('img-progress-msg');
-    if (el) el.remove();
-  }
 
-  function addImageMsg(imageUrl, prompt) {
-    const div = document.createElement('div');
-    div.className = 'msg-jarvis';
-    div.innerHTML = `
-      ${jarvisAvatarHTML()}
-      <div class="msg-jarvis-inner">
-        <div class="msg-jarvis-name">JARVIS  //  ${getTime()}</div>
-        <div class="msg-jarvis-bubble">
-          Sir, image bana di! "${escHtml(prompt)}"
-          <br>
-          <img src="${imageUrl}" class="msg-image" alt="Generated Image"/>
-        </div>
-        <div class="msg-time">${getTime()}</div>
-      </div>`;
-    document.getElementById('chat-messages').appendChild(div);
-    scrollBottom();
-  }
+# ── ARC REACTOR ───────────────────────────────────────────────
+class ArcReactor(tk.Canvas):
+    def __init__(self, parent, size=48, **kw):
+        super().__init__(parent, width=size, height=size,
+                         bg="#0b0f1a", highlightthickness=0, **kw)
+        self.size = size
+        self.angle = 0.0
+        self.pulse = 0.0
+        self.pulse_dir = 1
+        self.active = False
+        self._animate()
 
-  async function generateImage(prompt) {
-    const encoded = encodeURIComponent(prompt);
-    const seed = Date.now();
-    const servers = [
-      { name: "Pollinations Flux", url: `https://image.pollinations.ai/prompt/${encoded}?width=512&height=512&nologo=true&model=flux&seed=${seed}` },
-      { name: "Pollinations Turbo", url: `https://image.pollinations.ai/prompt/${encoded}?width=512&height=512&nologo=true&model=turbo&seed=${seed+1}` },
-      { name: "Pollinations Default", url: `https://image.pollinations.ai/prompt/${encoded}?width=512&height=512&nologo=true&seed=${seed+2}` },
-    ];
-    for (let i = 0; i < servers.length; i++) {
-      updateImageProgress(i+1, servers.length, servers[i].name);
-      try {
-        const res = await fetch(servers[i].url);
-        if (res.ok) {
-          const blob = await res.blob();
-          if (blob.size > 5000) return URL.createObjectURL(blob);
-        }
-      } catch(e) { continue; }
-    }
-    return null;
-  }
+    def _draw(self):
+        self.delete("all")
+        c = self.size / 2
+        r = c - 3
+        p = self.pulse
 
-  function typewrite(el, text, i) {
-    if (i <= text.length) {
-      el.textContent = text.slice(0, i) + '▌';
-      scrollBottom();
-      setTimeout(() => typewrite(el, text, i+1), 14);
-    } else {
-      el.textContent = text;
-    }
-  }
+        for rad, w in [(r, 1), (r-4, 1), (r-8, 1.5)]:
+            g = int(160 + p * 95)
+            self.create_oval(c-rad, c-rad, c+rad, c+rad,
+                             outline=f"#00{min(255,g):02x}ff", width=w)
 
-  function escHtml(t) {
-    return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
+        for i in range(12):
+            a = math.radians(self.angle + i * 30)
+            inner = r - 10 if i % 3 == 0 else r - 6
+            x1 = c + inner * math.cos(a)
+            y1 = c + inner * math.sin(a)
+            x2 = c + r * math.cos(a)
+            y2 = c + r * math.sin(a)
+            b = int(80 + 175 * abs(math.sin(math.radians(i * 30))))
+            self.create_line(x1, y1, x2, y2,
+                             fill=f"#00{b:02x}{min(255,b+60):02x}",
+                             width=2 if i % 3 == 0 else 1)
 
-  function scrollBottom() {
-    const c = document.getElementById('chat-messages');
-    c.scrollTop = c.scrollHeight;
-  }
+        hr = r * 0.45
+        pts = []
+        for i in range(6):
+            a = math.radians(60 * i - self.angle * 0.4)
+            pts += [c + hr * math.cos(a), c + hr * math.sin(a)]
+        self.create_polygon(pts, outline="#00d4ff", fill="", width=1)
 
-  async function sendMessage() {
-    const inp = document.getElementById('user-input');
-    const text = inp.value.trim();
-    if (!text) return;
-    inp.value = '';
-    inp.style.height = 'auto';
+        cr = 5 + p * 3
+        b2 = int(150 + p * 105)
+        self.create_oval(c-cr, c-cr, c+cr, c+cr,
+                         fill=f"#00{min(255,b2):02x}ff",
+                         outline="#ffffff", width=1)
+        self.create_oval(c-2, c-2, c+2, c+2, fill="#ffffff", outline="")
 
-    addUserMsg(text);
+    def _animate(self):
+        self.angle = (self.angle + (4 if self.active else 1.5)) % 360
+        self.pulse += 0.04 * self.pulse_dir
+        if self.pulse >= 1: self.pulse_dir = -1
+        elif self.pulse <= 0: self.pulse_dir = 1
+        self._draw()
+        self.after(40, self._animate)
 
-    const cmd = text.toLowerCase();
-    const isImage = cmd.includes('image banao') || cmd.includes('image bana') || cmd.includes('tasveer banao');
+    def set_active(self, v):
+        self.active = v
 
-    if (isImage) {
-      let prompt = text;
-      ['image banao','image bana','tasveer banao','jarvis'].forEach(w => {
-        prompt = prompt.replace(new RegExp(w, 'gi'), '').trim();
-      });
 
-      addImageProgress();
-      document.getElementById('status-text').textContent = 'IMAGE SYNTHESIS...';
+# ── SETUP WINDOW ──────────────────────────────────────────────
+class SetupWindow(ctk.CTkToplevel):
+    def __init__(self, parent, on_success):
+        super().__init__(parent)
+        self.on_success = on_success
+        self.title("J.A.R.V.I.S — Setup")
+        self.geometry("480x580")
+        self.resizable(False, False)
+        self.configure(fg_color="#0b0f1a")
+        self.grab_set()
+        self._build()
 
-      const imageUrl = await generateImage(prompt || text);
-      removeImageProgress();
+    def _build(self):
+        # Arc reactor
+        arc = ArcReactor(self, size=80)
+        arc.pack(pady=(40, 10))
 
-      if (imageUrl) {
-        addImageMsg(imageUrl, prompt || text);
-      } else {
-        addJarvisMsg('Sir, abhi image servers busy hain — 2 minute baad try karein.');
-      }
+        ctk.CTkLabel(self, text="J.A.R.V.I.S",
+                     font=ctk.CTkFont("Courier", 22, "bold"),
+                     text_color="#00d4ff").pack()
 
-      document.getElementById('status-text').textContent = 'ONLINE';
-      return;
-    }
+        ctk.CTkLabel(self, text="ENTER KEYS TO ACCESS",
+                     font=ctk.CTkFont("Courier", 10),
+                     text_color="#1a4a6a").pack(pady=(4, 30))
 
-    addTyping();
-    document.getElementById('status-text').textContent = 'PROCESSING...';
-    chatHistory.push({ role: 'user', content: text });
-    if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
+        # ── GROQ KEY ──
+        ctk.CTkFrame(self, height=1, fg_color="#141e2e").pack(fill="x", padx=40, pady=(0, 20))
 
-    try {
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...chatHistory],
-          max_tokens: 1024,
-          temperature: 0.7
-        })
-      });
-      const data = await res.json();
-      const reply = data.choices?.[0]?.message?.content || 'Sir, kuch masla aa gaya.';
-      chatHistory.push({ role: 'assistant', content: reply });
-      removeTyping();
-      addJarvisMsg(reply);
-    } catch(e) {
-      removeTyping();
-      addJarvisMsg(`Sir, network error: ${e.message}`);
-    }
+        ctk.CTkLabel(self, text="GROQ API KEY",
+                     font=ctk.CTkFont("Courier", 9),
+                     text_color="#1a5a7a").pack(anchor="w", padx=40)
 
-    document.getElementById('status-text').textContent = 'ONLINE';
-  }
+        groq_frame = ctk.CTkFrame(self, fg_color="#0d1422",
+                                   border_color="#1a2a3a", border_width=1,
+                                   corner_radius=8)
+        groq_frame.pack(fill="x", padx=40, pady=(4, 0))
+        groq_frame.grid_columnconfigure(0, weight=1)
 
-  function quickSend(text) {
-    document.getElementById('user-input').value = text;
-    sendMessage();
-  }
+        self._groq_var = tk.StringVar()
+        self._groq_entry = ctk.CTkEntry(groq_frame,
+                                         textvariable=self._groq_var,
+                                         placeholder_text="••••••••••••••••••••••••",
+                                         font=ctk.CTkFont("Courier", 12),
+                                         fg_color="transparent",
+                                         border_width=0,
+                                         text_color="#00ff88",
+                                         show="•")
+        self._groq_entry.grid(row=0, column=0, sticky="ew", padx=10, pady=8)
+        self._groq_entry.bind("<Return>", lambda e: self._hf_entry.focus())
 
-  function handleKey(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  }
+        self._groq_show = ctk.CTkButton(groq_frame, text="👁",
+                                         width=32, height=28,
+                                         fg_color="transparent",
+                                         hover_color="#1a2a3a",
+                                         text_color="#1a5a7a",
+                                         font=ctk.CTkFont(size=14),
+                                         command=lambda: self._toggle_show(self._groq_entry, self._groq_show))
+        self._groq_show.grid(row=0, column=1, padx=(0, 6))
 
-  function autoResize(el) {
-    el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
-  }
+        self._groq_err = ctk.CTkLabel(self, text="✗ INCORRECT KEY",
+                                       font=ctk.CTkFont("Courier", 9),
+                                       text_color="#ff4444")
 
-  window.onload = () => {
-    const saved = localStorage.getItem('jarvis_key');
-    if (saved) document.getElementById('api-key-input').value = saved;
-  };
-</script>
-</body>
-</html>
+        ctk.CTkLabel(self, text="Get free key: console.groq.com",
+                     font=ctk.CTkFont("Courier", 8),
+                     text_color="#0d2a3a",
+                     cursor="hand2").pack(anchor="w", padx=40, pady=(3, 16))
+
+        # ── HF KEY ──
+        ctk.CTkLabel(self, text="HUGGING FACE TOKEN  (for image generation)",
+                     font=ctk.CTkFont("Courier", 9),
+                     text_color="#1a5a7a").pack(anchor="w", padx=40)
+
+        hf_frame = ctk.CTkFrame(self, fg_color="#0d1422",
+                                  border_color="#1a2a3a", border_width=1,
+                                  corner_radius=8)
+        hf_frame.pack(fill="x", padx=40, pady=(4, 0))
+        hf_frame.grid_columnconfigure(0, weight=1)
+
+        self._hf_var = tk.StringVar()
+        self._hf_entry = ctk.CTkEntry(hf_frame,
+                                       textvariable=self._hf_var,
+                                       placeholder_text="••••••••••••••••••••••••",
+                                       font=ctk.CTkFont("Courier", 12),
+                                       fg_color="transparent",
+                                       border_width=0,
+                                       text_color="#00ff88",
+                                       show="•")
+        self._hf_entry.grid(row=0, column=0, sticky="ew", padx=10, pady=8)
+        self._hf_entry.bind("<Return>", lambda e: self._verify())
+
+        self._hf_show = ctk.CTkButton(hf_frame, text="👁",
+                                       width=32, height=28,
+                                       fg_color="transparent",
+                                       hover_color="#1a2a3a",
+                                       text_color="#1a5a7a",
+                                       font=ctk.CTkFont(size=14),
+                                       command=lambda: self._toggle_show(self._hf_entry, self._hf_show))
+        self._hf_show.grid(row=0, column=1, padx=(0, 6))
+
+        ctk.CTkLabel(self, text="Get free token: huggingface.co/settings/tokens",
+                     font=ctk.CTkFont("Courier", 8),
+                     text_color="#0d2a3a").pack(anchor="w", padx=40, pady=(3, 24))
+
+        # ── STATUS ──
+        self._status_lbl = ctk.CTkLabel(self, text="",
+                                         font=ctk.CTkFont("Courier", 10),
+                                         text_color="#ff4444")
+        self._status_lbl.pack(pady=(0, 8))
+
+        # ── BUTTON ──
+        self._btn = ctk.CTkButton(self, text="ACCESS JARVIS",
+                                   font=ctk.CTkFont("Courier", 13, "bold"),
+                                   height=46,
+                                   fg_color="#0d1e30",
+                                   hover_color="#132840",
+                                   border_color="#00d4ff",
+                                   border_width=1,
+                                   text_color="#00d4ff",
+                                   corner_radius=8,
+                                   command=self._verify)
+        self._btn.pack(fill="x", padx=40, pady=(0, 20))
+
+        # Load saved keys
+        config = load_config()
+        if config.get("groq_key"):
+            self._groq_entry.insert(0, config["groq_key"])
+        if config.get("hf_key"):
+            self._hf_entry.insert(0, config["hf_key"])
+
+    def _toggle_show(self, entry, btn):
+        if entry.cget("show") == "•":
+            entry.configure(show="")
+            btn.configure(text="🙈")
+        else:
+            entry.configure(show="•")
+            btn.configure(text="👁")
+
+    def _verify(self):
+        groq_key = self._groq_var.get().strip()
+        hf_key = self._hf_var.get().strip()
+
+        if not groq_key:
+            self._status_lbl.configure(text="✗ GROQ KEY REQUIRED", text_color="#ff4444")
+            return
+
+        if not groq_key.startswith("gsk_"):
+            self._status_lbl.configure(text="✗ INCORRECT GROQ KEY", text_color="#ff4444")
+            return
+
+        self._btn.configure(text="VERIFYING...", state="disabled")
+        self._status_lbl.configure(text="Connecting to Groq...", text_color="#ffb347")
+
+        def verify_thread():
+            try:
+                client = Groq(api_key=groq_key)
+                client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[{"role": "user", "content": "hi"}],
+                    max_tokens=5
+                )
+                # Success
+                save_config({"groq_key": groq_key, "hf_key": hf_key})
+                self.after(0, lambda: self.on_success(groq_key, hf_key))
+                self.after(0, self.destroy)
+            except Exception as e:
+                err = str(e)
+                if "401" in err or "invalid" in err.lower() or "auth" in err.lower():
+                    msg = "✗ INCORRECT GROQ KEY"
+                else:
+                    msg = "✗ CONNECTION ERROR — CHECK INTERNET"
+                self.after(0, lambda m=msg: self._status_lbl.configure(
+                    text=m, text_color="#ff4444"))
+                self.after(0, lambda: self._btn.configure(
+                    text="ACCESS JARVIS", state="normal"))
+
+        threading.Thread(target=verify_thread, daemon=True).start()
+
+
+# ── MAIN APP ──────────────────────────────────────────────────
+class JarvisApp(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.title("J.A.R.V.I.S — Biki Sir")
+        self.geometry("1200x820")
+        self.minsize(900, 600)
+        self.configure(fg_color="#0b0f1a")
+        self._msg_row = 0
+        self._build()
+        self._show_welcome()
+        self._pulse_status()
+        # Show setup after window loads
+        self.after(300, self._check_setup)
+
+    def _check_setup(self):
+        config = load_config()
+        groq_key = config.get("groq_key", "")
+        hf_key = config.get("hf_key", "")
+        if groq_key and groq_key.startswith("gsk_"):
+            self._init_jarvis(groq_key, hf_key)
+        else:
+            SetupWindow(self, self._init_jarvis)
+
+    def _init_jarvis(self, groq_key, hf_key):
+        global groq_client, HF_API_KEY
+        groq_client = Groq(api_key=groq_key)
+        HF_API_KEY = hf_key
+        self._set_mode("Standby")
+
+    def _pulse_status(self):
+        cols = ["#00ff88", "#00cc70", "#00ff88"]
+        i = int(time.time() * 1.5) % len(cols)
+        if hasattr(self, "_stat_dot"):
+            self._stat_dot.configure(text_color=cols[i])
+        self.after(400, self._pulse_status)
+
+    def _build(self):
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        # ── SIDEBAR ──
+        sb = ctk.CTkFrame(self, width=225, fg_color="#0b0f1a", corner_radius=0)
+        sb.grid(row=0, column=0, sticky="nsew")
+        sb.grid_rowconfigure(3, weight=1)
+        sb.grid_propagate(False)
+
+        ctk.CTkFrame(sb, width=1, fg_color="#141e2e").place(
+            relx=1.0, rely=0, relheight=1.0, anchor="ne")
+
+        top = ctk.CTkFrame(sb, fg_color="transparent")
+        top.grid(row=0, column=0, padx=16, pady=(24, 8), sticky="ew")
+
+        self._sb_arc = ArcReactor(top, size=46)
+        self._sb_arc.pack(side="left", padx=(0, 12))
+
+        lf = ctk.CTkFrame(top, fg_color="transparent")
+        lf.pack(side="left")
+        ctk.CTkLabel(lf, text="J.A.R.V.I.S",
+                     font=ctk.CTkFont("Courier", 17, "bold"),
+                     text_color="#00d4ff").pack(anchor="w")
+        ctk.CTkLabel(lf, text="BIKI SIR  //  AUTHORIZED",
+                     font=ctk.CTkFont("Courier", 8),
+                     text_color="#1a3a5a").pack(anchor="w")
+
+        ctk.CTkFrame(sb, height=1, fg_color="#141e2e").grid(
+            row=1, column=0, sticky="ew", padx=12, pady=6)
+
+        ctk.CTkButton(sb, text="  NEW SESSION",
+                      font=ctk.CTkFont("Courier", 11), height=38,
+                      corner_radius=6, fg_color="#0d1828",
+                      hover_color="#132030",
+                      border_color="#00d4ff", border_width=1,
+                      text_color="#00d4ff",
+                      command=self._new_chat
+                      ).grid(row=2, column=0, padx=14, pady=4, sticky="ew")
+
+        ctk.CTkFrame(sb, fg_color="transparent").grid(row=3, column=0, sticky="nsew")
+
+        ctk.CTkFrame(sb, height=1, fg_color="#141e2e").grid(
+            row=4, column=0, sticky="ew", padx=12, pady=4)
+
+        stat = ctk.CTkFrame(sb, fg_color="#0d1422", corner_radius=8)
+        stat.grid(row=5, column=0, padx=14, pady=(4, 6), sticky="ew")
+
+        ctk.CTkLabel(stat, text="SYSTEM STATUS",
+                     font=ctk.CTkFont("Courier", 8),
+                     text_color="#1a3a5a").pack(anchor="w", padx=10, pady=(8, 2))
+
+        self._stat_dot = ctk.CTkLabel(stat, text="  ONLINE",
+                                      font=ctk.CTkFont("Courier", 12, "bold"),
+                                      text_color="#00ff88")
+        self._stat_dot.pack(anchor="w", padx=10)
+
+        self._stat_mode = ctk.CTkLabel(stat, text="MODE: STANDBY",
+                                       font=ctk.CTkFont("Courier", 9),
+                                       text_color="#1a4a6a")
+        self._stat_mode.pack(anchor="w", padx=10, pady=(0, 8))
+
+        ctk.CTkFrame(sb, height=1, fg_color="#141e2e").grid(
+            row=6, column=0, sticky="ew", padx=12, pady=4)
+
+        qf = ctk.CTkFrame(sb, fg_color="transparent")
+        qf.grid(row=7, column=0, padx=14, pady=4, sticky="ew")
+
+        ctk.CTkLabel(qf, text="QUICK COMMANDS",
+                     font=ctk.CTkFont("Courier", 8),
+                     text_color="#1a3a5a").pack(anchor="w", pady=(0, 4))
+
+        for cmd in ["Chrome kholo", "YouTube kholo", "Screenshot lo", "Calculator kholo"]:
+            ctk.CTkButton(qf, text=f"> {cmd}",
+                          font=ctk.CTkFont("Courier", 10), height=28,
+                          corner_radius=4, fg_color="#0b1220",
+                          hover_color="#0d1828",
+                          border_color="#141e2e", border_width=1,
+                          text_color="#1a6a8a", anchor="w",
+                          command=lambda c=cmd: self._process(c)
+                          ).pack(fill="x", pady=2)
+
+        # Settings button
+        ctk.CTkFrame(sb, height=1, fg_color="#141e2e").grid(
+            row=8, column=0, sticky="ew", padx=12, pady=4)
+
+        ctk.CTkButton(sb, text="⚙ CHANGE KEYS",
+                      font=ctk.CTkFont("Courier", 10), height=32,
+                      corner_radius=4, fg_color="#0b1220",
+                      hover_color="#0d1828",
+                      border_color="#141e2e", border_width=1,
+                      text_color="#1a3a5a",
+                      command=lambda: SetupWindow(self, self._init_jarvis)
+                      ).grid(row=9, column=0, padx=14, pady=4, sticky="ew")
+
+        ctk.CTkLabel(sb, text="v2.0  //  19-03-2026",
+                     font=ctk.CTkFont("Courier", 7),
+                     text_color="#0d1a2a").grid(row=10, column=0, pady=(4, 14))
+
+        # ── MAIN AREA ──
+        main = ctk.CTkFrame(self, fg_color="#0b0f1a", corner_radius=0)
+        main.grid(row=0, column=1, sticky="nsew")
+        main.grid_rowconfigure(0, weight=1)
+        main.grid_columnconfigure(0, weight=1)
+
+        self._chat = ctk.CTkScrollableFrame(
+            main, fg_color="#0b0f1a", corner_radius=0,
+            scrollbar_button_color="#141e2e",
+            scrollbar_button_hover_color="#1a2a3a")
+        self._chat.grid(row=0, column=0, sticky="nsew")
+        self._chat.grid_columnconfigure(0, weight=1)
+
+        self._img_panel = self._make_img_panel(main)
+        self._img_panel.grid(row=1, column=0, sticky="ew", padx=24, pady=(4, 0))
+        self._img_panel.grid_remove()
+
+        self._build_input(main)
+
+    def _make_img_panel(self, parent):
+        panel = ctk.CTkFrame(parent, fg_color="#0d1422",
+                             corner_radius=10,
+                             border_color="#1a3a5a", border_width=1)
+        panel.grid_columnconfigure(1, weight=1)
+
+        self._panel_arc = ArcReactor(panel, size=52)
+        self._panel_arc.grid(row=0, column=0, rowspan=3, padx=(14, 10), pady=14)
+
+        self._panel_title = ctk.CTkLabel(panel,
+                                         text="  IMAGE SYNTHESIS ACTIVE",
+                                         font=ctk.CTkFont("Courier", 12, "bold"),
+                                         text_color="#00d4ff")
+        self._panel_title.grid(row=0, column=1, sticky="w", pady=(12, 0))
+
+        self._panel_server = ctk.CTkLabel(panel, text="Initializing...",
+                                          font=ctk.CTkFont("Courier", 10),
+                                          text_color="#1a5a7a")
+        self._panel_server.grid(row=1, column=1, sticky="w")
+
+        pf = ctk.CTkFrame(panel, fg_color="transparent")
+        pf.grid(row=2, column=1, sticky="ew", pady=(2, 12), padx=(0, 16))
+        pf.grid_columnconfigure(0, weight=1)
+
+        self._panel_bar = ctk.CTkProgressBar(pf, height=6, corner_radius=3,
+                                              fg_color="#0b1220",
+                                              progress_color="#00d4ff")
+        self._panel_bar.grid(row=0, column=0, sticky="ew")
+        self._panel_bar.set(0)
+
+        self._panel_pct = ctk.CTkLabel(pf, text="0%",
+                                        font=ctk.CTkFont("Courier", 9),
+                                        text_color="#1a5a7a")
+        self._panel_pct.grid(row=1, column=0, sticky="w", pady=(2, 0))
+
+        self._panel_timer = ctk.CTkLabel(panel, text="00:00",
+                                          font=ctk.CTkFont("Courier", 20, "bold"),
+                                          text_color="#00ff88")
+        self._panel_timer.grid(row=0, column=2, rowspan=3, padx=(0, 18), pady=14)
+
+        return panel
+
+    def _build_input(self, parent):
+        bar = ctk.CTkFrame(parent, fg_color="#0d1220", corner_radius=0,
+                           border_color="#141e2e", border_width=1)
+        bar.grid(row=2, column=0, sticky="ew")
+        bar.grid_columnconfigure(0, weight=1)
+
+        inner = ctk.CTkFrame(bar, fg_color="transparent")
+        inner.grid(row=0, column=0, padx=20, pady=14, sticky="ew")
+        inner.grid_columnconfigure(0, weight=1)
+
+        box = ctk.CTkFrame(inner, fg_color="#0b1220", corner_radius=10,
+                           border_color="#1a2a3a", border_width=1)
+        box.grid(row=0, column=0, sticky="ew")
+        box.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(box, text=">>",
+                     font=ctk.CTkFont("Courier", 13, "bold"),
+                     text_color="#00d4ff", width=30
+                     ).grid(row=0, column=0, padx=(14, 0))
+
+        self._inp = ctk.CTkTextbox(box, height=46,
+                                   font=ctk.CTkFont("Courier", 13),
+                                   fg_color="transparent",
+                                   text_color="#00ff88",
+                                   border_width=0, wrap="word")
+        self._inp.grid(row=0, column=1, sticky="ew", padx=6, pady=6)
+        self._inp.bind("<Return>", self._on_enter)
+        self._inp.bind("<Shift-Return>", lambda e: None)
+
+        ctk.CTkButton(box, text="SEND", width=72, height=36,
+                      font=ctk.CTkFont("Courier", 11, "bold"),
+                      fg_color="#0d1e30", hover_color="#132840",
+                      border_color="#00d4ff", border_width=1,
+                      text_color="#00d4ff", corner_radius=6,
+                      command=self._send
+                      ).grid(row=0, column=2, padx=8, pady=6)
+
+        ctk.CTkLabel(inner,
+                     text="ENTER = TRANSMIT   //   SHIFT+ENTER = NEW LINE",
+                     font=ctk.CTkFont("Courier", 8),
+                     text_color="#1a2a3a"
+                     ).grid(row=1, column=0, sticky="w", pady=(4, 0))
+
+    def _show_welcome(self):
+        card = ctk.CTkFrame(self._chat, fg_color="#0d1422",
+                            corner_radius=14,
+                            border_color="#1a2a3a", border_width=1)
+        card.grid(row=0, column=0, pady=40, padx=30, sticky="ew")
+        card.grid_columnconfigure(0, weight=1)
+
+        arc = ArcReactor(card, size=80)
+        arc.grid(row=0, column=0, pady=(36, 12))
+
+        ctk.CTkLabel(card, text="J.A.R.V.I.S  ONLINE",
+                     font=ctk.CTkFont("Courier", 26, "bold"),
+                     text_color="#00d4ff").grid(row=1, column=0)
+
+        ctk.CTkLabel(card, text="GOOD MORNING, BIKI SIR.",
+                     font=ctk.CTkFont("Courier", 13),
+                     text_color="#1a6a8a").grid(row=2, column=0, pady=(4, 2))
+
+        ctk.CTkLabel(card,
+                     text="ALL SYSTEMS OPERATIONAL  //  AWAITING YOUR DIRECTIVE",
+                     font=ctk.CTkFont("Courier", 9),
+                     text_color="#1a3a4a").grid(row=3, column=0, pady=(0, 16))
+
+        ctk.CTkFrame(card, height=1, fg_color="#141e2e").grid(
+            row=4, column=0, sticky="ew", padx=40, pady=(0, 16))
+
+        sug = ctk.CTkFrame(card, fg_color="transparent")
+        sug.grid(row=5, column=0, pady=(0, 36))
+
+        for i, txt in enumerate([
+            "Chrome kholo", "Python sikhao",
+            "Image banao iron man", "Screenshot lo"
+        ]):
+            ctk.CTkButton(sug, text=f"  > {txt}",
+                          font=ctk.CTkFont("Courier", 11), height=36,
+                          corner_radius=6, fg_color="#0b1220",
+                          hover_color="#0d1828",
+                          border_color="#1a2a3a", border_width=1,
+                          text_color="#1a7a9a",
+                          command=lambda t=txt: self._process(t)
+                          ).grid(row=i//2, column=i%2, padx=6, pady=5, ipadx=12)
+
+        self._msg_row = 1
+
+    def _add_user_msg(self, text):
+        row = ctk.CTkFrame(self._chat, fg_color="transparent")
+        row.grid(row=self._msg_row, column=0,
+                 sticky="ew", padx=20, pady=(10, 2))
+        row.grid_columnconfigure(0, weight=1)
+        self._msg_row += 1
+
+        wrap = ctk.CTkFrame(row, fg_color="transparent")
+        wrap.grid(row=0, column=0, sticky="e")
+
+        ctk.CTkLabel(wrap, text="BIKI SIR",
+                     font=ctk.CTkFont("Courier", 8, "bold"),
+                     text_color="#1a4a6a").pack(anchor="e")
+
+        bub = ctk.CTkFrame(wrap, fg_color="#0d1e30",
+                           corner_radius=10,
+                           border_color="#1a3a5a", border_width=1)
+        bub.pack(anchor="e")
+
+        ctk.CTkLabel(bub, text=text,
+                     font=ctk.CTkFont("Courier", 12),
+                     text_color="#a0d8f0",
+                     wraplength=500, justify="left"
+                     ).pack(padx=14, pady=10)
+
+        ctk.CTkLabel(wrap, text=datetime.now().strftime("%H:%M:%S"),
+                     font=ctk.CTkFont("Courier", 8),
+                     text_color="#1a2a3a").pack(anchor="e", pady=(2, 0))
+
+        self._scroll_bottom()
+
+    def _add_jarvis_msg(self, text):
+        row = ctk.CTkFrame(self._chat, fg_color="transparent")
+        row.grid(row=self._msg_row, column=0,
+                 sticky="ew", padx=20, pady=(2, 10))
+        row.grid_columnconfigure(1, weight=1)
+        self._msg_row += 1
+
+        arc = ArcReactor(row, size=34)
+        arc.grid(row=0, column=0, sticky="n", padx=(0, 10), pady=2)
+
+        right = ctk.CTkFrame(row, fg_color="transparent")
+        right.grid(row=0, column=1, sticky="ew")
+
+        ctk.CTkLabel(right,
+                     text=f"JARVIS  //  {datetime.now().strftime('%H:%M:%S')}",
+                     font=ctk.CTkFont("Courier", 9, "bold"),
+                     text_color="#00d4ff").pack(anchor="w", pady=(0, 3))
+
+        bub = ctk.CTkFrame(right, fg_color="#0d1220",
+                           corner_radius=10,
+                           border_color="#1a2a3a", border_width=1)
+        bub.pack(anchor="w", fill="x")
+
+        lbl = ctk.CTkLabel(bub, text="",
+                           font=ctk.CTkFont("Courier", 12),
+                           text_color="#90e0ff",
+                           wraplength=620, justify="left")
+        lbl.pack(padx=14, pady=12, anchor="w")
+
+        ctk.CTkLabel(right, text=datetime.now().strftime("%H:%M:%S"),
+                     font=ctk.CTkFont("Courier", 8),
+                     text_color="#1a2a3a").pack(anchor="w", pady=(2, 0))
+
+        self._scroll_bottom()
+        self._typewrite(lbl, text, 0)
+
+    def _typewrite(self, label, text, index):
+        if index <= len(text):
+            label.configure(text=text[:index] + "▌")
+            self._scroll_bottom()
+            self.after(16, lambda: self._typewrite(label, text, index + 1))
+        else:
+            label.configure(text=text)
+
+    def _add_typing(self):
+        f = ctk.CTkFrame(self._chat, fg_color="transparent")
+        f.grid(row=self._msg_row, column=0, sticky="w", padx=24, pady=4)
+        self._typing_lbl = ctk.CTkLabel(f,
+                                         text="  JARVIS PROCESSING...",
+                                         font=ctk.CTkFont("Courier", 11),
+                                         text_color="#1a4a6a")
+        self._typing_lbl.pack()
+        self._typing_frame = f
+        self._msg_row += 1
+        self._scroll_bottom()
+        self._blink_typing()
+
+    def _blink_typing(self):
+        if not hasattr(self, "_typing_frame") or not self._typing_frame.winfo_exists():
+            return
+        texts = ["  JARVIS PROCESSING...", "  JARVIS PROCESSING.  ", "  JARVIS PROCESSING.. "]
+        i = int(time.time() * 3) % len(texts)
+        self._typing_lbl.configure(text=texts[i])
+        self.after(333, self._blink_typing)
+
+    def _remove_typing(self):
+        if hasattr(self, "_typing_frame"):
+            self._typing_frame.destroy()
+
+    def _scroll_bottom(self):
+        try:
+            self._chat._parent_canvas.yview_moveto(1.0)
+        except:
+            pass
+
+    def _start_img_panel(self):
+        self._img_elapsed = 0
+        self._img_running = True
+        self._panel_bar.set(0)
+        self._panel_pct.configure(text="0%")
+        self._panel_title.configure(text="  IMAGE SYNTHESIS ACTIVE")
+        self._panel_server.configure(text="Connecting to servers...")
+        self._panel_timer.configure(text="00:00")
+        self._panel_arc.set_active(True)
+        self._img_panel.grid()
+        self._tick_timer()
+
+    def _tick_timer(self):
+        if not getattr(self, "_img_running", False):
+            return
+        self._img_elapsed += 1
+        m = self._img_elapsed // 60
+        s = self._img_elapsed % 60
+        self._panel_timer.configure(text=f"{m:02d}:{s:02d}")
+        self.after(1000, self._tick_timer)
+
+    def _update_img_panel(self, current, total, server_name):
+        pct = int((current / total) * 100)
+        self._panel_bar.set(pct / 100)
+        self._panel_pct.configure(text=f"{pct}%")
+        self._panel_title.configure(text=f"  IMAGE SYNTHESIS  {pct}%  [{current}/{total}]")
+        self._panel_server.configure(text=f"  {server_name}")
+
+    def _stop_img_panel(self):
+        self._img_running = False
+        self._panel_arc.set_active(False)
+        self.after(800, lambda: self._img_panel.grid_remove())
+
+    def _set_mode(self, text, color="#1a4a6a"):
+        self._stat_mode.configure(text=f"MODE: {text.upper()}", text_color=color)
+
+    def _process(self, text):
+        if not text.strip():
+            return
+        if groq_client is None:
+            self._add_jarvis_msg("Sir, pehle API key setup karein — sidebar mein '⚙ CHANGE KEYS' dabayein.")
+            return
+
+        self._add_user_msg(text)
+        cmd = text.lower()
+        is_img = any(w in cmd for w in ["image banao", "image bana", "tasveer banao"])
+
+        if is_img:
+            self._start_img_panel()
+            self._set_mode("Image Synthesis", "#ffb347")
+        else:
+            self._add_typing()
+            self._set_mode("Processing", "#ffb347")
+
+        def worker():
+            if is_img:
+                prompt = text
+                for w in ["image banao", "image bana", "tasveer banao", "jarvis"]:
+                    prompt = prompt.replace(w, "").strip()
+
+                def cb(cur, tot, srv):
+                    self.after(0, lambda c=cur, t=tot, s=srv:
+                               self._update_img_panel(c, t, s))
+
+                reply = generate_image(prompt, progress_callback=cb)
+                self.after(0, self._stop_img_panel)
+            else:
+                pc = do_pc_task(text)
+                reply = pc if pc else ask_jarvis(text)
+
+            self.after(0, lambda r=reply, img=is_img: self._show_reply(r, img))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _show_reply(self, reply, is_img=False):
+        if not is_img:
+            self._remove_typing()
+        self._add_jarvis_msg(reply)
+        self._set_mode("Standby")
+
+    def _on_enter(self, event):
+        self._send()
+        return "break"
+
+    def _send(self, event=None):
+        text = self._inp.get("1.0", "end").strip()
+        self._inp.delete("1.0", "end")
+        self._process(text)
+
+    def _new_chat(self):
+        global conversation_history
+        conversation_history = []
+        for w in self._chat.winfo_children():
+            w.destroy()
+        self._msg_row = 0
+        self._show_welcome()
+
+
+if __name__ == "__main__":
+    ctk.set_appearance_mode("dark")
+    ctk.set_default_color_theme("blue")
+    app = JarvisApp()
+    app.mainloop()
