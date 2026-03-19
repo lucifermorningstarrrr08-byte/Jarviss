@@ -1,7 +1,7 @@
 {
-  "name": "JARVIS",
-  "short_name": "JARVIS",
-  "description": "J.A.R.V.I.S Personal AI Assistant by Biki Sir",
+  "name": "JARVISS",
+  "short_name": "JARVISS",
+  "description": "J.A.R.V.I.SS Personal AI Assistant by Biki ",
   "start_url": "/Jarviss/",
   "scope": "/Jarviss/",
   "display": "standalone",
@@ -9,11 +9,19 @@
   "background_color": "#0b0f1a",
   "theme_color": "#00d4ff",
   "lang": "en",
+  "categories": ["productivity", "utilities"],
   "icons": [
     {
-      "src": "https://raw.githubusercontent.com/lucifermorningstarrrr08-byte/Jarviss/main/icon.png",
+      "src": "/Jarviss/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/Jarviss/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
